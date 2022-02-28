@@ -1,16 +1,57 @@
 package com.example.android.politicalpreparedness.election
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.*
+import com.example.android.politicalpreparedness.database.ElectionDatabase
+import com.example.android.politicalpreparedness.network.models.Election
+import com.example.android.politicalpreparedness.repo.ElectionRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.lang.Exception
 
-//TODO: Construct ViewModel and provide election datasource
-class ElectionsViewModel: ViewModel() {
+enum class ElectionListStatus { LOADING, DONE, ERROR }
+class ElectionsViewModel(application: Application) : AndroidViewModel(application) {
 
-    //TODO: Create live data val for upcoming elections
+    private val database = ElectionDatabase.getInstance(application)
+    private val repository = ElectionRepository(database)
 
-    //TODO: Create live data val for saved elections
+    private val _navigateToVoterInfo = MutableLiveData<Election>()
 
-    //TODO: Create val and functions to populate live data for upcoming elections from the API and saved elections from local database
+    val savedElectionList = repository.list
 
-    //TODO: Create functions to navigate to saved or upcoming election voter info
+    private val _status = MutableLiveData<ElectionListStatus>()
+    val status: LiveData<ElectionListStatus>
+        get() = _status
 
+    val electionList = liveData(Dispatchers.IO) {
+        try {
+            _status.postValue(ElectionListStatus.LOADING)
+            Log.i("ElectionsViewModel", repository.getElection().body().toString())
+            val retrievedElection = repository.getElection().body()
+            emit(retrievedElection?.elections)
+            _status.postValue(ElectionListStatus.DONE)
+
+        } catch (e: Exception) {
+            _status.postValue(ElectionListStatus.ERROR)
+            Log.e("ElectionsViewModel", e.message.toString())
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            repository.getElections()
+        }
+    }
+
+    val navigateToVoterInfo: LiveData<Election>
+        get() = _navigateToVoterInfo
+
+    fun displayVoterInfo(election: Election) {
+        _navigateToVoterInfo.value = election
+    }
+
+    fun displayVoterInfoComplete() {
+        _navigateToVoterInfo.value = null
+    }
 }

@@ -21,7 +21,7 @@
         <Button
             android:id="@+id/upcomingButton"
             android:layout_width="match_parent"
-            android:text="@string/upcoming_election"
+            android:text="@string/upcoming_election_string"
             android:textColor="@color/white"
             android:layout_height="wrap_content"
             android:layout_marginStart="16dp"
