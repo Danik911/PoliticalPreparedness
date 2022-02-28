@@ -1,67 +1,134 @@
 package com.example.android.politicalpreparedness.representative
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.Geocoder
+import kotlinx.android.synthetic.main.fragment_representative.*
 import android.location.Location
 import android.os.Bundle
+import android.util.Log
 import android.view.*
 import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
+import androidx.constraintlayout.motion.widget.MotionLayout
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProvider
+import com.example.android.politicalpreparedness.R
+import com.example.android.politicalpreparedness.databinding.FragmentRepresentativeBinding
 import com.example.android.politicalpreparedness.network.models.Address
+import com.example.android.politicalpreparedness.representative.adapter.RepresentativeListAdapter
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import java.util.Locale
 
-class DetailFragment : Fragment() {
+private const val TAG = "RepresentativeFragment"
+
+class RepresentativeFragment : Fragment() {
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var representativeViewModel: RepresentativeViewModel
+    private lateinit var representativesViewModelFactory: RepresentativesViewModelFactory
+    private lateinit var adapter: RepresentativeListAdapter
 
     companion object {
-        //TODO: Add Constant for Location request
-    }
+        private const val REQUEST_LOCATION_PERMISSION = 1
 
-    //TODO: Declare ViewModel
+    }
 
     override fun onCreateView(inflater: LayoutInflater,
                               container: ViewGroup?,
                               savedInstanceState: Bundle?): View? {
+        val binding = FragmentRepresentativeBinding.inflate(inflater)
+        binding.lifecycleOwner = this
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(activity!!)
+        representativesViewModelFactory = RepresentativesViewModelFactory(requireActivity().application)
+        representativeViewModel = ViewModelProvider(this, representativesViewModelFactory).get(RepresentativeViewModel::class.java)
+        binding.viewModel = representativeViewModel
+        adapter = RepresentativeListAdapter()
+        binding.representativesRecycleView.adapter = adapter
+        binding.motionLayoutRepresentative.setTransition(R.id.start, R.id.start)
 
-        //TODO: Establish bindings
+        binding.buttonLocation.setOnClickListener {
+            Log.i(TAG, checkLocationPermissions().toString())
+            if (checkLocationPermissions()) {
 
-        //TODO: Define and assign Representative adapter
 
-        //TODO: Populate Representative adapter
+                getLocation()
+                hideKeyboard()
+                binding.motionLayoutRepresentative.setTransition(R.id.start, R.id.end)
 
-        //TODO: Establish button listeners for field and location search
+            }
+        }
+        binding.buttonSearch.setOnClickListener {
+            val address = Address(binding.addressLine1.text.toString(), "",
+                binding.city.text.toString(),
+                binding.state.selectedItem.toString(),
+                binding.zip.text.toString())
+            representativeViewModel.getAddress(address)
+            representativeViewModel.getRepresentativeList()
+            hideKeyboard()
+            binding.motionLayoutRepresentative.setTransition(R.id.start, R.id.end)
+        }
 
+
+        return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        representativeViewModel.representative.observe(viewLifecycleOwner, Observer {
+            Log.i(TAG, it.size.toString())
+            adapter.submitList(it)
+
+
+        })
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        //TODO: Handle location permission result to get location on permission granted
+        if (grantResults.isEmpty() || grantResults[REQUEST_LOCATION_PERMISSION] == PackageManager.PERMISSION_DENIED) {
+            Toast.makeText(activity, "You should allow location", Toast.LENGTH_LONG).show()
+        } else {
+            getLocation()
+        }
     }
 
     private fun checkLocationPermissions(): Boolean {
         return if (isPermissionGranted()) {
             true
         } else {
-            //TODO: Request Location permissions
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQUEST_LOCATION_PERMISSION)
             false
         }
     }
 
-    private fun isPermissionGranted() : Boolean {
-        //TODO: Check if permission is already granted and return (true = granted, false = denied/other)
+    private fun isPermissionGranted(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            activity!!,
+            Manifest.permission.ACCESS_FINE_LOCATION) === PackageManager.PERMISSION_GRANTED
     }
 
+    @SuppressLint("MissingPermission")
     private fun getLocation() {
-        //TODO: Get location from LocationServices
-        //TODO: The geoCodeLocation method is a helper function to change the lat/long location to a human readable street address
+        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+            if (location != null) {
+                representativeViewModel.getAddress(geoCodeLocation(location))
+                representativeViewModel.getRepresentativeList()
+                Log.i(TAG, representativeViewModel.address.toString())
+            }
+        }
     }
 
     private fun geoCodeLocation(location: Location): Address {
         val geocoder = Geocoder(context, Locale.getDefault())
         return geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                .map { address ->
-                    Address(address.thoroughfare, address.subThoroughfare, address.locality, address.adminArea, address.postalCode)
-                }
-                .first()
+            .map { address ->
+                Address(address.thoroughfare, address.subThoroughfare, address.locality, address.adminArea, address.postalCode)
+            }
+            .first()
     }
 
     private fun hideKeyboard() {

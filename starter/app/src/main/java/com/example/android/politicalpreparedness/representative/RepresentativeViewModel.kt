@@ -1,26 +1,53 @@
 package com.example.android.politicalpreparedness.representative
 
-import androidx.lifecycle.ViewModel
 
-class RepresentativeViewModel: ViewModel() {
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.*
+import com.example.android.politicalpreparedness.database.ElectionDatabase.Companion.getInstance
+import com.example.android.politicalpreparedness.network.models.Address
+import com.example.android.politicalpreparedness.repo.ElectionRepository
+import com.example.android.politicalpreparedness.representative.model.Representative
+import kotlinx.coroutines.launch
 
-    //TODO: Establish live data for representatives and address
+private const val TAG = "RepresentativeViewModel"
 
-    //TODO: Create function to fetch representatives from API from a provided address
+class RepresentativeViewModel(application: Application) : AndroidViewModel(application) {
+    private val database = getInstance(application)
+    private val repository = ElectionRepository(database)
 
-    /**
-     *  The following code will prove helpful in constructing a representative from the API. This code combines the two nodes of the RepresentativeResponse into a single official :
+    private val _address = MutableLiveData<Address>()
+    val address: LiveData<Address>
+        get() = _address
 
-    val (offices, officials) = getRepresentativesDeferred.await()
-    _representatives.value = offices.flatMap { office -> office.getRepresentatives(officials) }
+    private val _representatives = MutableLiveData<List<Representative>>()
+    val representative: LiveData<List<Representative>>
+        get() = _representatives
 
-    Note: getRepresentatives in the above code represents the method used to fetch data from the API
-    Note: _representatives in the above code represents the established mutable live data housing representatives
 
-     */
+    fun getRepresentativeList() {
+        viewModelScope.launch {
+            try {
+                val (offices, officials) = repository.getRepresentatives(_address.value!!.toFormattedString())
+                _representatives.value = offices.flatMap { office -> office.getRepresentatives(officials) }
+                Log.i(TAG, _representatives.value.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, e.message.toString())
+            }
+        }
 
-    //TODO: Create function get address from geo location
+    }
 
-    //TODO: Create function to get address from individual fields
+    fun getAddress(address: Address) {
+        _address.value = address
+    }
 
+
+}
+
+class RepresentativesViewModelFactory(
+    private val application: Application
+) : ViewModelProvider.NewInstanceFactory() {
+    override fun <T : ViewModel> create(modelClass: Class<T>) =
+        (RepresentativeViewModel(application) as T)
 }
